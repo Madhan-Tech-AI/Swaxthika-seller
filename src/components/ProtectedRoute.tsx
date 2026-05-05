@@ -1,17 +1,24 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, openAuthModal } = useAuth();
+  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      openAuthModal();
-      navigate('/');
+    if (!isLoading) {
+      if (!user) {
+        navigate('/login');
+      } else if (user.user_metadata?.role !== 'seller') {
+        // Not a seller, sign out and redirect
+        supabase.auth.signOut().then(() => {
+          navigate('/login');
+        });
+      }
     }
-  }, [user, isLoading, navigate, openAuthModal]);
+  }, [user, isLoading, navigate]);
 
   if (isLoading) {
     return (
@@ -21,5 +28,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return user ? <>{children}</> : null;
+  return user && user.user_metadata?.role === 'seller' ? <>{children}</> : null;
 }
+
