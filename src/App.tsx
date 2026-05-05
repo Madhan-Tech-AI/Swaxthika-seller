@@ -1,7 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Navigate } from 'react-router-dom';
-import { SellerLayout } from './layouts/SellerLayout';
-import { SellerDashboard } from './pages/seller/Dashboard';
 import { SellerApplications } from './pages/admin/SellerApplications';
 import { BannersManager } from './pages/admin/BannersManager';
 
@@ -14,33 +12,27 @@ import { Settings } from './pages/admin/Settings';
 import { CarouselManager } from './pages/admin/CarouselManager';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
-import { AuthModal } from './components/AuthModal';
-import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <AuthModal />
         <Router>
-        <Routes>
-        <Route path="/" element={<Navigate to="/admin" replace />} />
-        
-        <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
-          <Route path="products" element={<Products />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="customers" element={<Customers />} />
-          <Route path="carousel" element={<CarouselManager />} />
-          <Route path="banners" element={<BannersManager />} />
-          <Route path="seller-applications" element={<SellerApplications />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-
-        <Route path="/seller" element={<ProtectedRoute><SellerLayout /></ProtectedRoute>}>
-          <Route index element={<SellerDashboard />} />
-        </Route>
-        </Routes>
+          <Routes>
+            <Route path="/" element={<Navigate to="/admin" replace />} />
+            <Route path="/login" element={<Navigate to="/admin" replace />} />
+            
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="products" element={<Products />} />
+              <Route path="orders" element={<Orders />} />
+              <Route path="customers" element={<Customers />} />
+              <Route path="carousel" element={<CarouselManager />} />
+              <Route path="banners" element={<BannersManager />} />
+              <Route path="seller-applications" element={<SellerApplications />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+          </Routes>
         </Router>
       </AuthProvider>
     </ToastProvider>
@@ -48,3 +40,5 @@ function App() {
 }
 
 export default App;
+
+

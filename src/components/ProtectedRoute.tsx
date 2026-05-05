@@ -3,15 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, openAuthModal } = useAuth();
+  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!isLoading && !user) {
-      openAuthModal();
-      navigate('/');
+      navigate('/login');
     }
-  }, [user, isLoading, navigate, openAuthModal]);
+  }, [user, isLoading, navigate]);
 
   if (isLoading) {
     return (
@@ -23,3 +22,4 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   return user ? <>{children}</> : null;
 }
+

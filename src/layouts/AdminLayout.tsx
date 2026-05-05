@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBag, Users, Package, Settings, LogOut, Search, Bell, Lock, Image, X, Store, FileImage } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, Package, Settings, LogOut, Search, Bell, Lock, Image, X, Store, FileImage, Sparkles, LogIn, Mail } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -85,53 +85,114 @@ export function AdminLayout() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-premium border border-gray-100 p-8">
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-2">
-              <Lock className="w-8 h-8" />
+      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-6 selection:bg-primary-100 selection:text-primary-900 font-sans">
+        <div className="w-full max-w-5xl h-[640px] bg-white rounded-3xl overflow-hidden flex shadow-premium hover:shadow-premium-hover transition-all duration-500 border border-black/5">
+          
+          {/* Left Visual Column */}
+          <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary via-primary/80 to-secondary relative p-12 flex-col justify-between overflow-hidden">
+            <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
+            <div className="absolute -top-32 -right-32 w-80 h-80 bg-accent/20 rounded-full blur-3xl"></div>
+            <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-secondary/30 rounded-full blur-3xl"></div>
+
+            {/* Swaxtika Brand/Slogan */}
+            <div className="relative z-10">
+              <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-4 py-2 rounded-full border border-white/30 mb-8 animate-fade-in">
+                <Sparkles className="w-4 h-4 text-accent" />
+                <span className="text-xs font-bold font-display uppercase tracking-wider text-white">Administrator Portal</span>
+              </div>
+              <h1 className="text-4xl lg:text-5xl font-display font-extrabold text-white leading-tight">
+                Manage the <span className="text-accent">Swaxtika</span> ecosystem with ease.
+              </h1>
+              <p className="mt-4 text-white/90 text-sm font-sans leading-relaxed">
+                Log in to access complete dashboard controls, view metrics, approve sellers, and manage all your platform data in one place.
+              </p>
+            </div>
+
+            <div className="relative z-10 flex items-center justify-between border-t border-white/20 pt-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl flex items-center justify-center font-display font-bold text-2xl text-white shadow-inner select-none">
+                  S
+                </div>
+                <div>
+                  <div className="text-white text-base font-display font-bold leading-none">Swaxtika</div>
+                  <div className="text-white/60 text-xs mt-1">Sacred Ecommerce</div>
+                </div>
+              </div>
+              <div className="text-white/40 text-xs font-display tracking-widest font-bold">
+                EST. 2026
+              </div>
             </div>
           </div>
-          <h2 className="text-2xl font-display font-bold text-center text-foreground mb-2">Admin Access</h2>
-          <p className="text-center text-foreground/60 mb-8">Enter your credentials to access the dashboard</p>
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Email Address</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                placeholder="Admin@swaxthika.com"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Password</label>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                placeholder="••••••••"
-              />
-            </div>
-
-            {error && (
-              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-center">
-                {error}
+          {/* Right Form Column */}
+          <div className="w-full lg:w-1/2 p-10 flex flex-col justify-center relative bg-white">
+            <div className="max-w-md mx-auto w-full">
+              <div className="mb-10 text-center lg:text-left">
+                <h2 className="text-3xl font-display font-extrabold text-foreground tracking-tight">
+                  Portal Access
+                </h2>
+                <p className="text-gray-500 text-sm mt-2">
+                  Sign in using your administrator credentials below.
+                </p>
               </div>
-            )}
 
-            <button
-              type="submit"
-              className="w-full bg-primary hover:bg-primary-600 text-white font-medium py-2.5 rounded-lg transition-colors shadow-sm"
-            >
-              Secure Login
-            </button>
-          </form>
+              <form onSubmit={handleLogin} className="space-y-6">
+                {/* Email Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground uppercase tracking-wider">Email Address</label>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors duration-300">
+                      <Mail className="h-5 w-5 text-gray-400 group-focus-within:text-primary" />
+                    </div>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="block w-full pl-12 pr-4 py-3.5 border border-black/10 rounded-xl bg-background/30 text-foreground placeholder-gray-400 focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300 text-sm shadow-sm"
+                      placeholder="Admin@swaxthika.com"
+                    />
+                  </div>
+                </div>
+
+                {/* Password Input */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-foreground uppercase tracking-wider">Password</label>
+                  </div>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors duration-300">
+                      <Lock className="h-5 w-5 text-gray-400 group-focus-within:text-primary" />
+                    </div>
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="block w-full pl-12 pr-4 py-3.5 border border-black/10 rounded-xl bg-background/30 text-foreground placeholder-gray-400 focus:bg-white focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all duration-300 text-sm shadow-sm"
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+
+                {error && (
+                  <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-center">
+                    {error}
+                  </div>
+                )}
+
+                {/* Action Submit */}
+                <button
+                  type="submit"
+                  className="w-full h-12 flex items-center justify-center gap-3 bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary text-white font-bold rounded-xl shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-300 transform active:scale-[0.98] mt-8 select-none disabled:opacity-75"
+                >
+                  <LogIn className="w-5 h-5" />
+                  <span>Access Admin Console</span>
+                </button>
+              </form>
+            </div>
+          </div>
+
         </div>
       </div>
     );

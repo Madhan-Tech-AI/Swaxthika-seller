@@ -8,6 +8,7 @@ const PAGE_SIZE = 10;
 
 export function Products() {
   const [products, setProducts] = useState<any[]>([]);
+  const [sellers, setSellers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any | null>(null);
@@ -38,7 +39,8 @@ export function Products() {
     description: '',
     is_featured: false,
     is_deal: false,
-    status: 'Active'
+    status: 'Active',
+    seller_id: ''
   });
   const [bulletPoints, setBulletPoints] = useState<string[]>(['']);
   const [additionalImages, setAdditionalImages] = useState<string[]>([]);
@@ -112,6 +114,9 @@ export function Products() {
     try {
       const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
       if (data) setProducts(data);
+
+      const { data: sellersData } = await supabase.from('seller_applications').select('*').eq('status', 'approved');
+      if (sellersData) setSellers(sellersData);
     } catch (error) {
       console.error('Error fetching admin products:', error);
     } finally {
@@ -160,6 +165,7 @@ export function Products() {
       is_featured: product.is_featured || false,
       is_deal: product.is_deal || false,
       status: product.status || 'Active',
+      seller_id: product.seller_id || '',
     });
     setBulletPoints(product.bullet_points?.length ? product.bullet_points : ['']);
     setAdditionalImages(product.additional_images || []);
@@ -269,7 +275,8 @@ export function Products() {
         original_price: formData.original_price ? Number(formData.original_price) : null,
         stock: Number(formData.stock),
         bullet_points: cleanedBullets,
-        additional_images: cleanedImages
+        additional_images: cleanedImages,
+        seller_id: formData.seller_id || null
       };
 
       if (editingProduct) {
@@ -284,7 +291,7 @@ export function Products() {
 
       setIsAdding(false);
       setEditingProduct(null);
-      setFormData({ name: '', brand: '', sku: '', category: '', price: '', original_price: '', stock: '', image: '', description: '', is_featured: false, is_deal: false, status: 'Active' });
+      setFormData({ name: '', brand: '', sku: '', category: '', price: '', original_price: '', stock: '', image: '', description: '', is_featured: false, is_deal: false, status: 'Active', seller_id: '' });
       setBulletPoints(['']);
       setAdditionalImages([]);
       fetchProducts();
@@ -410,6 +417,15 @@ export function Products() {
                         <option value="Pooja Items">Pooja Items</option>
                         <option value="Temple Jewellery">Temple Jewellery</option>
                         <option value="Homam Samagri">Homam Samagri</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Assigned Seller</label>
+                      <select value={formData.seller_id} onChange={e=>setFormData({...formData, seller_id: e.target.value})} className="w-full px-3 py-2 border rounded-md bg-white text-sm">
+                        <option value="">Admin / Platform Owner</option>
+                        {sellers.map((s: any) => (
+                          <option key={s.id} value={s.id}>{s.business_name} ({s.owner_name})</option>
+                        ))}
                       </select>
                     </div>
                   </div>
