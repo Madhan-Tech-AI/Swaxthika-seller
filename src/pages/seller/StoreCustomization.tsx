@@ -28,29 +28,38 @@ export function StoreCustomization() {
   const fetchSellerData = async () => {
     if (!user) return;
     try {
-      // Find seller application by user_id or email
-      const { data } = await supabase
+      // Primary Strategy: Match by user_id
+      let { data: seller } = await supabase
         .from('seller_applications')
         .select('*')
-        .or(`user_id.eq.${user.id},email.eq.${user.email}`)
-        .single();
+        .eq('user_id', user.id)
+        .eq('status', 'approved')
+        .maybeSingle();
 
-      if (data) {
-        setSellerApp(data);
-        setStoreData({
-          store_description: data.store_description || '',
-          store_website: data.store_website || '',
-          store_logo: data.store_logo || '',
-          store_banner: data.store_banner || ''
-        });
-
-        // Auto-link user_id if missing
-        if (!data.user_id) {
-          await supabase
-            .from('seller_applications')
-            .update({ user_id: user.id })
-            .eq('id', data.id);
+      // Secondary Strategy: Match by email (fallback)
+      if (!seller && user.email) {
+        const { data: byEmail } = await supabase
+          .from('seller_applications')
+          .select('*')
+          .ilike('email', user.email)
+          .eq('status', 'approved')
+          .maybeSingle();
+        
+        if (byEmail) {
+          seller = byEmail;
+          // Link user_id if missing
+          await supabase.from('seller_applications').update({ user_id: user.id }).eq('id', seller.id);
         }
+      }
+
+      if (seller) {
+        setSellerApp(seller);
+        setStoreData({
+          store_description: seller.store_description || '',
+          store_website: seller.store_website || '',
+          store_logo: seller.store_logo || '',
+          store_banner: seller.store_banner || ''
+        });
       }
     } catch (err) {
       console.error('Error fetching seller:', err);

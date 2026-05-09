@@ -294,10 +294,21 @@ export function SellerProducts() {
       }
 
       const validProducts: any[] = [];
+      const seenSkus = new Set<string>();
 
       rows.forEach((row, index) => {
         const rowNum = index + 2; 
         const rowErrors: string[] = [];
+
+        // Check for duplicate SKUs within the file
+        const sku = row.sku ? String(row.sku).trim() : null;
+        if (sku) {
+          if (seenSkus.has(sku.toLowerCase())) {
+            rowErrors.push(`duplicate SKU "${sku}" in file`);
+          } else {
+            seenSkus.add(sku.toLowerCase());
+          }
+        }
 
         if (!row.name || String(row.name).trim() === '') rowErrors.push('missing name');
         if (row.price === undefined || row.price === null || row.price === '' || isNaN(Number(row.price))) rowErrors.push('invalid price');
@@ -335,7 +346,15 @@ export function SellerProducts() {
       const BATCH_SIZE = 25;
       for (let i = 0; i < validProducts.length; i += BATCH_SIZE) {
         const batch = validProducts.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from('products').insert(batch);
+        
+        // Use upsert on 'sku' to allow updating existing products and avoid duplicate key errors
+        // Note: This only works if 'sku' is provided. If sku is null, it acts as a normal insert.
+        const { error } = await supabase
+          .from('products')
+          .upsert(batch, { 
+            onConflict: 'sku',
+            ignoreDuplicates: false // We want to update if SKU matches
+          });
 
         if (error) {
           errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${error.message}`);
