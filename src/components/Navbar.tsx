@@ -158,7 +158,7 @@ export function Navbar() {
                 </div>
                 <div className="flex flex-col">
                   <span className="font-display font-bold text-xl lg:text-2xl tracking-tight text-foreground leading-none">
-                    Sacred<span className="text-primary">.</span>
+                    Swaxthika<span className="text-primary">.</span>
                   </span>
                   <span className="text-[8px] lg:text-[10px] text-foreground/50 tracking-widest uppercase font-medium mt-1">
                     Spiritual Store

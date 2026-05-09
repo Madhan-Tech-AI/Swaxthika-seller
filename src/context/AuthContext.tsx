@@ -88,6 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (!error && data) {
         setProfile(data);
       } else if (!data) {
+<<<<<<< HEAD
         // No profile found — seller may have been created via admin API
         // Set a minimal profile so the app doesn't break
         setProfile({ id: userId, role: 'seller' });
@@ -95,6 +96,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       console.error('Error fetching profile:', err);
       // Still set a fallback profile so loading resolves
+=======
+        // No profile found — set minimal fallback
+        setProfile({ id: userId });
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+>>>>>>> 04fc0f1d35e1087a58ef766938a8d8e292ad3de9
       setProfile({ id: userId });
     } finally {
       setIsLoading(false);

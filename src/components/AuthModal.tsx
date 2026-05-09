@@ -142,7 +142,7 @@ export function AuthModal() {
               S
             </div>
             <div className="mt-4 font-display font-bold tracking-tight leading-none">
-              Sacred<span className="text-white">.</span>
+              Swaxthika<span className="text-white">.</span>
             </div>
           </div>
         </div>
@@ -231,7 +231,7 @@ export function AuthModal() {
               </div>
 
               <p className="mt-8 text-center text-sm text-gray-600">
-                New to Sacred?{' '}
+                New to Swaxthika?{' '}
                 <button 
                   onClick={() => setView('signup')}
                   className="font-bold text-primary hover:text-primary-600"
