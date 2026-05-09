@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Store, Search, Bell, X } from 'lucide-react';
@@ -7,6 +7,7 @@ const NAV_ITEMS = [
   { name: 'Dashboard', path: '/', icon: LayoutDashboard },
   { name: 'My Products', path: '/products', icon: Package },
   { name: 'Orders', path: '/orders', icon: ShoppingBag },
+  { name: 'Store Customization', path: '/store-customization', icon: Store },
   { name: 'Settings', path: '/settings', icon: Settings },
 ];
 
@@ -44,11 +45,10 @@ export const SellerLayout = () => {
                   key={item.name}
                   to={item.path}
                   end={item.path === '/'}
-                  className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
-                    isActive
+                  className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive
                       ? 'bg-amber-900/10 text-amber-900'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  }`}
+                    }`}
                 >
                   <item.icon className="w-5 h-5" />
                   {item.name}

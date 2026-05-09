@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Edit, Trash2, X, Upload, UploadCloud, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Search, Edit, Trash2, X, Upload, Download, UploadCloud, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import * as XLSX from 'xlsx';
 
 export function SellerProducts() {
   const { user } = useAuth();
@@ -35,24 +36,64 @@ export function SellerProducts() {
   const [additionalImages, setAdditionalImages] = useState<string[]>([]);
   const [uploadingMainImage, setUploadingMainImage] = useState(false);
   const [uploadingAdditional, setUploadingAdditional] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [bulkResults, setBulkResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
 
   useEffect(() => {
-    if (user?.email) {
-      supabase
-        .from('seller_applications')
-        .select('*')
-        .eq('email', user.email)
-        .eq('status', 'approved')
-        .limit(1)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (data) {
-            setSellerApp(data);
-          } else {
-            setLoading(false);
+    const findSellerApp = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        console.log('[Products] Seller lookup starting for:', user.id);
+
+        // Primary Strategy: Match by user_id (most reliable)
+        const { data: byId } = await supabase
+          .from('seller_applications')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'approved')
+          .maybeSingle();
+
+        if (byId) {
+          console.log('[Products] Found seller by ID:', byId.business_name);
+          setSellerApp(byId);
+          return;
+        }
+
+        // Secondary Strategy: Match by email (fallback for older accounts)
+        if (user.email) {
+          const { data: byEmail } = await supabase
+            .from('seller_applications')
+            .select('*')
+            .ilike('email', user.email)
+            .eq('status', 'approved')
+            .maybeSingle();
+
+          if (byEmail) {
+            console.log('[Products] Found seller by email:', byEmail.business_name);
+            // Link user_id if not present
+            if (!byEmail.user_id) {
+              await supabase.from('seller_applications').update({ user_id: user.id }).eq('id', byEmail.id);
+            }
+            setSellerApp(byEmail);
+            return;
           }
-        });
-    }
+        }
+
+        console.warn('[Products] No approved seller application found for user');
+      } catch (err) {
+        console.error('[Products] Seller lookup exception:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    findSellerApp();
   }, [user]);
 
   useEffect(() => {
@@ -171,9 +212,165 @@ export function SellerProducts() {
     }
   };
 
+  const handleDownloadTemplate = () => {
+    const templateData = [
+      {
+        name: 'Example Product',
+        brand: 'Example Brand',
+        sku: 'SKU12345',
+        category: 'Brass Idols',
+        price: 999.99,
+        original_price: 1299.99,
+        stock: 50,
+        description: 'Detailed product description here...',
+        image: 'https://example.com/image.jpg',
+        bullet_points: 'Feature 1|Feature 2|Feature 3',
+        is_featured: false,
+        is_deal: false,
+        status: 'Active'
+      }
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+
+    ws['!cols'] = [
+      { wch: 30 }, { wch: 18 }, { wch: 14 }, { wch: 18 },
+      { wch: 10 }, { wch: 14 }, { wch: 8 }, { wch: 40 },
+      { wch: 50 }, { wch: 40 }, { wch: 12 }, { wch: 10 }, { wch: 10 }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Products_Template");
+
+    const instructions = [
+      { Instructions: 'BULK UPLOAD TEMPLATE GUIDE' },
+      { Instructions: '' },
+      { Instructions: 'REQUIRED COLUMNS: name, price, stock, category' },
+      { Instructions: '' },
+      { Instructions: 'COLUMN DETAILS:' },
+      { Instructions: 'name - Product title (required)' },
+      { Instructions: 'brand - Brand name (optional)' },
+      { Instructions: 'sku - Unique SKU code (optional)' },
+      { Instructions: 'category - Must be: Brass Idols, Spiritual Books, Pooja Items, Temple Jewellery, or Homam Samagri' },
+      { Instructions: 'price - Selling price in INR (required, number)' },
+      { Instructions: 'original_price - MRP/Original price in INR (optional, number)' },
+      { Instructions: 'stock - Available quantity (required, number)' },
+      { Instructions: 'description - Full product description (optional)' },
+      { Instructions: 'image - Product image URL (paste a public image URL)' },
+      { Instructions: 'bullet_points - Key features separated by | (pipe). Example: Feature 1|Feature 2|Feature 3' },
+      { Instructions: 'is_featured - true or false (optional, default: false)' },
+      { Instructions: 'is_deal - true or false (optional, default: false)' },
+      { Instructions: 'status - Active, Draft, or Out of Stock (optional, default: Active)' },
+    ];
+    const wsInstructions = XLSX.utils.json_to_sheet(instructions);
+    wsInstructions['!cols'] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+
+    XLSX.writeFile(wb, "products_bulk_upload_template.xlsx");
+  };
+
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !sellerApp) return;
+
+    setBulkUploading(true);
+    setBulkResults(null);
+
+    const VALID_CATEGORIES = ['Brass Idols', 'Spiritual Books', 'Pooja Items', 'Temple Jewellery', 'Homam Samagri'];
+    const errors: string[] = [];
+    let successCount = 0;
+    let failedCount = 0;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+      if (rows.length === 0) {
+        showToast('error', 'Empty File', 'The uploaded file contains no product data.');
+        setBulkUploading(false);
+        return;
+      }
+
+      const validProducts: any[] = [];
+
+      rows.forEach((row, index) => {
+        const rowNum = index + 2; 
+        const rowErrors: string[] = [];
+
+        if (!row.name || String(row.name).trim() === '') rowErrors.push('missing name');
+        if (row.price === undefined || row.price === null || row.price === '' || isNaN(Number(row.price))) rowErrors.push('invalid price');
+        if (row.stock === undefined || row.stock === null || row.stock === '' || isNaN(Number(row.stock))) rowErrors.push('invalid stock');
+
+        const category = row.category ? String(row.category).trim() : '';
+        if (category && !VALID_CATEGORIES.includes(category)) {
+          rowErrors.push(`unknown category "${category}"`);
+        }
+
+        if (rowErrors.length > 0) {
+          errors.push(`Row ${rowNum} (${row.name || 'unnamed'}): ${rowErrors.join(', ')}`);
+          failedCount++;
+          return;
+        }
+
+        validProducts.push({
+          name: String(row.name).trim(),
+          brand: row.brand ? String(row.brand).trim() : null,
+          sku: row.sku ? String(row.sku).trim() : null,
+          category: category || null,
+          price: Number(row.price),
+          original_price: row.original_price && !isNaN(Number(row.original_price)) ? Number(row.original_price) : null,
+          stock: Math.max(0, Math.floor(Number(row.stock))),
+          description: row.description ? String(row.description).trim() : '',
+          image: row.image ? String(row.image).trim() : null,
+          bullet_points: row.bullet_points ? String(row.bullet_points).split('|').map((b: string) => b.trim()).filter((b: string) => b) : [],
+          is_featured: row.is_featured === true || String(row.is_featured).toLowerCase() === 'true',
+          is_deal: row.is_deal === true || String(row.is_deal).toLowerCase() === 'true',
+          status: ['Active', 'Draft', 'Out of Stock'].includes(row.status) ? row.status : 'Active',
+          seller_id: sellerApp.id 
+        });
+      });
+
+      const BATCH_SIZE = 25;
+      for (let i = 0; i < validProducts.length; i += BATCH_SIZE) {
+        const batch = validProducts.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from('products').insert(batch);
+
+        if (error) {
+          errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${error.message}`);
+          failedCount += batch.length;
+        } else {
+          successCount += batch.length;
+        }
+      }
+
+      setBulkResults({ success: successCount, failed: failedCount, errors });
+
+      if (successCount > 0) {
+        showToast('success', 'Bulk Upload Complete', `${successCount} products added successfully.`);
+        fetchProducts();
+      }
+      if (failedCount > 0) {
+        showToast('error', 'Some Rows Failed', `${failedCount} rows had errors. Check the summary.`);
+      }
+    } catch (error: any) {
+      console.error("Bulk upload error:", error);
+      showToast('error', 'Bulk Upload Failed', error?.message || 'Please check your file format and try again.');
+    } finally {
+      setBulkUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sellerApp) return;
+    if (!sellerApp) {
+      showToast('error', 'No Seller Account', 'No approved seller account found. Please contact admin.');
+      return;
+    }
     setSaving(true);
     try {
       const cleanedBullets = bulletPoints.filter(b => b.trim() !== '');
@@ -188,13 +385,24 @@ export function SellerProducts() {
         seller_id: sellerApp.id
       };
 
+      console.log('[Products] Saving product with seller_id:', sellerApp.id);
+      console.log('[Products] Current user email:', user?.email);
+      console.log('[Products] Seller app data:', sellerApp);
+
       if (editingProduct) {
         const { error } = await supabase.from('products').update(productData).eq('id', editingProduct.id).eq('seller_id', sellerApp.id);
-        if (error) throw error;
+        if (error) {
+          console.error('[Products] Update error:', error);
+          throw error;
+        }
         showToast('success', 'Product Updated', `${formData.name} has been updated.`);
       } else {
-        const { error } = await supabase.from('products').insert([productData]);
-        if (error) throw error;
+        const { data, error } = await supabase.from('products').insert([productData]).select();
+        if (error) {
+          console.error('[Products] Insert error:', error);
+          throw error;
+        }
+        console.log('[Products] Insert success:', data);
         showToast('success', 'Product Added', `${formData.name} has been added to your catalog.`);
       }
 
@@ -204,8 +412,11 @@ export function SellerProducts() {
       setBulletPoints(['']);
       setAdditionalImages([]);
       fetchProducts();
-    } catch (error) {
-      showToast('error', 'Save Failed', 'Failed to save product.');
+    } catch (error: any) {
+      console.error('[Products] Save error details:', error);
+      const errorMsg = error?.message || error?.details || 'Unknown error';
+      const errorCode = error?.code ? ` (${error.code})` : '';
+      showToast('error', 'Save Failed', `${errorMsg}${errorCode}`);
     } finally {
       setSaving(false);
     }
@@ -239,12 +450,35 @@ export function SellerProducts() {
           <p className="text-stone-500 text-sm mt-1">Manage and edit the products offered in your seller store</p>
         </div>
         {!isAdding && (
-          <button 
-            onClick={() => setIsAdding(true)}
-            className="bg-amber-900 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-amber-950 transition-colors flex items-center gap-2 shadow-sm"
-          >
-            <Plus className="w-4 h-4" /> Add Product
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleDownloadTemplate}
+              className="bg-white text-stone-700 px-4 py-2 border border-stone-300 rounded-md text-sm font-medium hover:bg-stone-50 transition-colors flex items-center gap-2 shadow-sm"
+            >
+              <Download className="w-4 h-4" /> Template
+            </button>
+            <input 
+              type="file" 
+              accept=".xlsx, .xls, .csv" 
+              className="hidden" 
+              ref={fileInputRef}
+              onChange={handleBulkUpload}
+            />
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={bulkUploading}
+              className="bg-white text-amber-900 border border-amber-900 px-4 py-2 rounded-md text-sm font-medium hover:bg-amber-50 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-50"
+            >
+              {bulkUploading ? <div className="w-4 h-4 border-2 border-amber-900 border-t-transparent rounded-full animate-spin"></div> : <Upload className="w-4 h-4" />}
+              Bulk Upload
+            </button>
+            <button 
+              onClick={() => setIsAdding(true)}
+              className="bg-amber-900 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-amber-950 transition-colors flex items-center gap-2 shadow-sm"
+            >
+              <Plus className="w-4 h-4" /> Add Product
+            </button>
+          </div>
         )}
       </div>
 
@@ -513,6 +747,50 @@ export function SellerProducts() {
           </div>
         </div>
       )}
+
+      {/* Bulk Upload Results Modal */}
+      {bulkResults && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-gray-900">Bulk Upload Summary</h3>
+              <button onClick={() => setBulkResults(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
+            </div>
+            <div className="p-6 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-green-50 rounded-lg p-4 text-center border border-green-100">
+                  <div className="text-2xl font-bold text-green-600">{bulkResults.success}</div>
+                  <div className="text-sm text-green-800 font-medium">Successfully Added</div>
+                </div>
+                <div className="bg-red-50 rounded-lg p-4 text-center border border-red-100">
+                  <div className="text-2xl font-bold text-red-600">{bulkResults.failed}</div>
+                  <div className="text-sm text-red-800 font-medium">Failed to Add</div>
+                </div>
+              </div>
+              
+              {bulkResults.errors.length > 0 && (
+                <div>
+                  <h4 className="font-bold text-red-800 mb-3">Error Details ({bulkResults.errors.length})</h4>
+                  <ul className="space-y-2">
+                    {bulkResults.errors.map((err, i) => (
+                      <li key={i} className="text-sm text-red-700 bg-red-50 px-3 py-2 rounded-md border border-red-100">{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+              <button 
+                onClick={() => setBulkResults(null)}
+                className="bg-amber-900 text-white px-6 py-2 rounded-md font-medium text-sm hover:bg-amber-950 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

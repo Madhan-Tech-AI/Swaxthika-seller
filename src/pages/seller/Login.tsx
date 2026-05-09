@@ -45,7 +45,7 @@ export function Login() {
   return (
     <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-6 selection:bg-primary-100 selection:text-primary-900 font-sans">
       <div className="w-full max-w-5xl h-[640px] bg-white rounded-3xl overflow-hidden flex shadow-premium hover:shadow-premium-hover transition-all duration-500 border border-black/5">
-        
+
         {/* Left Visual Column */}
         <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-600 via-primary-500 to-secondary-light relative p-12 flex-col justify-between overflow-hidden">
           <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>

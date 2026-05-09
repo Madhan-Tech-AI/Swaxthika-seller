@@ -83,13 +83,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
       
       if (!error && data) {
         setProfile(data);
+      } else if (!data) {
+        // No profile found — seller may have been created via admin API
+        // Set a minimal profile so the app doesn't break
+        setProfile({ id: userId, role: 'seller' });
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
+      // Still set a fallback profile so loading resolves
+      setProfile({ id: userId });
     } finally {
       setIsLoading(false);
     }

@@ -8,6 +8,7 @@ import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Login } from './pages/seller/Login';
+import { StoreCustomization } from './pages/seller/StoreCustomization';
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
               <Route index element={<SellerDashboard />} />
               <Route path="products" element={<SellerProducts />} />
               <Route path="orders" element={<SellerOrders />} />
+              <Route path="store-customization" element={<StoreCustomization />} />
               <Route path="settings" element={<SellerSettings />} />
             </Route>
           </Routes>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Package, IndianRupee, TrendingUp, ShoppingBag, Plus, Clock, ExternalLink, Star } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -28,86 +28,84 @@ export const SellerDashboard = () => {
   }, [user]);
 
   const fetchDashboardData = async () => {
-    if (!user?.email) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      // 1. Get the seller profile
-      const { data: seller } = await supabase
+      // Primary Strategy: Match by user_id
+      let { data: seller } = await supabase
         .from('seller_applications')
         .select('id')
-        .eq('email', user.email)
+        .eq('user_id', user.id)
         .eq('status', 'approved')
-        .limit(1)
         .maybeSingle();
 
-      if (!seller) {
-        setLoading(false);
-        return;
+      // Secondary Strategy: Match by email (fallback)
+      if (!seller && user.email) {
+        const { data: byEmail } = await supabase
+          .from('seller_applications')
+          .select('id')
+          .ilike('email', user.email)
+          .eq('status', 'approved')
+          .maybeSingle();
+        
+        if (byEmail) {
+          seller = byEmail;
+          // Link user_id if missing
+          await supabase.from('seller_applications').update({ user_id: user.id }).eq('id', seller.id);
+        }
       }
 
-      // 2. Fetch Seller's Products
-      const { data: products } = await supabase
-        .from('products')
-        .select('*')
-        .eq('seller_id', seller.id);
+      if (!seller) {
+        console.warn('[Dashboard] No approved seller found for user:', user.id);
+        setLoading(false); 
+        return; 
+      }
 
-      const sellerProducts = products || [];
-      const productIds = new Set(sellerProducts.map(p => p.id));
+      const [productsRes, orderItemsRes] = await Promise.all([
+        supabase.from('products').select('*').eq('seller_id', seller.id),
+        supabase.rpc('get_seller_orders')
+      ]);
 
-      // 3. Fetch All Orders to calculate seller specific metrics
-      const { data: allOrders } = await supabase
-        .from('orders')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const products = productsRes.data || [];
+      const orderItems = orderItemsRes.data || [];
 
-      let totalRevenue = 0;
-      let sellerOrdersCount = 0;
-      let recentOrders: any[] = [];
-
-      (allOrders || []).forEach(order => {
-        let isSellerOrder = false;
-        let orderRevenue = 0;
-
-        // Parse items (ensure it's an array)
-        const items = Array.isArray(order.items) ? order.items : [];
-        
-        items.forEach(item => {
-          if (productIds.has(item.product_id)) {
-            isSellerOrder = true;
-            // Assuming item structure has price and quantity
-            const itemPrice = Number(item.price || item.price_at_time) || 0;
-            const qty = Number(item.quantity) || 1;
-            orderRevenue += (itemPrice * qty);
-            totalRevenue += (itemPrice * qty);
-          }
-        });
-
-        if (isSellerOrder) {
-          sellerOrdersCount++;
-          if (recentOrders.length < 5) {
-            recentOrders.push({
-              ...order,
-              sellerRevenue: orderRevenue
-            });
-          }
+      // Group by order_id to calculate revenue correctly for each order
+      const orderMap = new Map<string, any>();
+      orderItems.forEach((oi: any) => {
+        const orderId = oi.order_id;
+        if (!orderMap.has(orderId)) {
+          orderMap.set(orderId, {
+            ...oi.order,
+            sellerRevenue: 0
+          });
         }
+        const o = orderMap.get(orderId);
+        o.sellerRevenue += (oi.line_total || 0);
       });
 
-      // 4. Calculate Top Products (just sorting by a mock metric if we don't have historical sales per product, e.g. lowest stock or highest rating)
-      const topProducts = [...sellerProducts]
-        .sort((a, b) => (Number(b.rating) || 0) - (Number(a.rating) || 0))
-        .slice(0, 5);
+      const uniqueOrders = Array.from(orderMap.values());
+      const totalOrders = uniqueOrders.length;
+
+      // Total Revenue = sum of all non-cancelled order revenues
+      const revenue = uniqueOrders
+        .filter((o: any) => o.status !== 'Cancelled')
+        .reduce((sum: number, o: any) => sum + (o.sellerRevenue || 0), 0);
+
+      // Recent orders (last 5, already sorted descending by SQL)
+      const recentOrders = uniqueOrders.slice(0, 5);
 
       setStats({
-        totalProducts: sellerProducts.length,
-        totalOrders: sellerOrdersCount,
-        revenue: totalRevenue,
+        totalProducts: products.length,
+        totalOrders,
+        revenue,
         recentOrders,
-        topProducts
+        topProducts: [...products].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 5),
       });
-
-    } catch (error) {
-      console.error("Error fetching dashboard data:", error);
+    } catch (err) {
+      console.error('Dashboard error:', err);
     } finally {
       setLoading(false);
     }

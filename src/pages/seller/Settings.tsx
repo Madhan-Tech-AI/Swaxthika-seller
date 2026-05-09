@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { Settings, User, Store, Shield, LogOut, CheckCircle } from 'lucide-react';
+import { User, Shield, LogOut, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const SellerSettings = () => {
@@ -9,23 +9,40 @@ export const SellerSettings = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [sellerData, setSellerData] = useState<any>(null);
-
+  
   useEffect(() => {
     fetchProfile();
   }, [user]);
 
   const fetchProfile = async () => {
-    if (!user?.email) return;
+    if (!user) return;
     try {
-      const { data } = await supabase
+      // Primary: user_id
+      let { data } = await supabase
         .from('seller_applications')
         .select('*')
-        .eq('email', user.email)
+        .eq('user_id', user.id)
         .eq('status', 'approved')
-        .limit(1)
         .maybeSingle();
+
+      if (!data && user.email) {
+        // Fallback: email
+        const { data: byEmail } = await supabase
+          .from('seller_applications')
+          .select('*')
+          .ilike('email', user.email)
+          .eq('status', 'approved')
+          .maybeSingle();
+        data = byEmail;
         
-      setSellerData(data);
+        if (data && !data.user_id) {
+          await supabase.from('seller_applications').update({ user_id: user.id }).eq('id', data.id);
+        }
+      }
+        
+      if (data) {
+        setSellerData(data);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -59,13 +76,12 @@ export const SellerSettings = () => {
         
         {/* Sidebar Nav */}
         <div className="space-y-2">
-          <button className="w-full flex items-center gap-3 px-4 py-3 bg-white text-amber-900 font-bold rounded-xl shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-amber-100 transition-all">
+          <button 
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-white text-amber-900 font-bold shadow-sm border border-amber-100 transition-all"
+          >
             <User className="w-5 h-5" /> Profile Overview
           </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-white hover:shadow-sm font-medium rounded-xl border border-transparent hover:border-gray-100 transition-all">
-            <Store className="w-5 h-5" /> Business Details
-          </button>
-          <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-white hover:shadow-sm font-medium rounded-xl border border-transparent hover:border-gray-100 transition-all">
+          <button className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-white hover:shadow-sm font-medium rounded-xl border border-transparent hover:border-gray-100 transition-all opacity-50 cursor-not-allowed">
             <Shield className="w-5 h-5" /> Security
           </button>
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-red-600 hover:bg-red-50 font-bold rounded-xl transition-all mt-4">
@@ -78,8 +94,12 @@ export const SellerSettings = () => {
           
           <div className="bg-white rounded-3xl shadow-[0_2px_20px_-4px_rgba(0,0,0,0.02)] border border-gray-100 overflow-hidden">
             <div className="p-8 border-b border-gray-100 flex items-center gap-6">
-              <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-amber-50 rounded-2xl flex items-center justify-center text-amber-800 text-2xl font-bold font-display border border-amber-200/50">
-                {user?.user_metadata?.first_name?.charAt(0) || 'S'}
+              <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-amber-50 rounded-2xl flex items-center justify-center text-amber-800 text-2xl font-bold font-display border border-amber-200/50 overflow-hidden">
+                {sellerData?.store_logo ? (
+                  <img src={sellerData.store_logo} className="w-full h-full object-cover" />
+                ) : (
+                  user?.user_metadata?.first_name?.charAt(0) || 'S'
+                )}
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{sellerData?.business_name || 'Seller Business'}</h2>
