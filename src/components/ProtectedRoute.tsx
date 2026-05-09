@@ -8,7 +8,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-<<<<<<< HEAD
     if (!isLoading) {
       if (!user) {
         navigate('/login');
@@ -18,10 +17,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
           navigate('/login');
         });
       }
-=======
-    if (!isLoading && !user) {
-      navigate('/login');
->>>>>>> 04fc0f1d35e1087a58ef766938a8d8e292ad3de9
     }
   }, [user, isLoading, navigate]);
 

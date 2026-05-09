@@ -1,4 +1,4 @@
-import { Search, Filter, Eye, X, Download, RefreshCw, Clock, FileText, ShoppingBag } from 'lucide-react';
+import { Search, Eye, X, Download, RefreshCw, Clock, FileText, ShoppingBag } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
