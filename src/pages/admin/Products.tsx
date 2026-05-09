@@ -1,13 +1,14 @@
-import { Plus, Search, Filter, Edit, Trash2, X, Upload, Download, UploadCloud, RefreshCw } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { Plus, Search, Edit, Trash2, X, Upload, Download, UploadCloud, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../../context/ToastContext';
 import * as XLSX from 'xlsx';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 20;
 
 export function Products() {
   const [products, setProducts] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [sellers, setSellers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
@@ -109,11 +110,24 @@ export function Products() {
     setAdditionalImages(additionalImages.filter(img => img !== urlToRemove));
   };
 
-  const fetchProducts = async () => {
+  const fetchProducts = async (page = currentPage, searchVal = search, catFilter = categoryFilter) => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-      if (data) setProducts(data);
+      let query = supabase
+        .from('products')
+        .select('*, seller_applications(business_name)', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+
+      if (catFilter !== 'All') query = query.eq('category', catFilter);
+      if (searchVal.trim()) {
+        query = query.or(`name.ilike.%${searchVal}%,sku.ilike.%${searchVal}%`);
+      }
+
+      const { data, count, error } = await query;
+      if (error) throw error;
+      setProducts(data || []);
+      setTotalCount(count || 0);
 
       const { data: sellersData } = await supabase.from('seller_applications').select('*').eq('status', 'approved');
       if (sellersData) setSellers(sellersData);
@@ -126,6 +140,9 @@ export function Products() {
 
   useEffect(() => {
     fetchProducts();
+  }, [currentPage, search, categoryFilter]);
+
+  useEffect(() => {
     const channel = supabase
       .channel('admin-products-rt')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
@@ -133,22 +150,10 @@ export function Products() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [currentPage, search, categoryFilter]);
 
-  const filtered = useMemo(() => {
-    let r = [...products];
-    if (categoryFilter !== 'All') r = r.filter(p => p.category === categoryFilter);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      r = r.filter(p => p.name?.toLowerCase().includes(q) || p.category?.toLowerCase().includes(q) || p.sku?.toLowerCase().includes(q));
-    }
-    return r;
-  }, [products, search, categoryFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-
-  const CATEGORIES = ['All', ...Array.from(new Set(products.map(p => p.category).filter(Boolean)))];
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const CATEGORIES = ['All', 'Brass Idols', 'Spiritual Books', 'Pooja Items', 'Temple Jewellery', 'Homam Samagri'];
 
   const handleEditProduct = (product: any) => {
     setEditingProduct(product);
@@ -194,6 +199,9 @@ export function Products() {
     showToast('success', 'Stock Updated', `Stock set to ${newStock}.`);
   };
 
+  // Bulk upload results state
+  const [bulkResults, setBulkResults] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+
   const handleDownloadTemplate = () => {
     const templateData = [
       {
@@ -204,9 +212,9 @@ export function Products() {
         price: 999.99,
         original_price: 1299.99,
         stock: 50,
-        description: 'Detailed description here...',
+        description: 'Detailed product description here...',
         image: 'https://example.com/image.jpg',
-        bullet_points: 'High quality|Handcrafted|Authentic',
+        bullet_points: 'Feature 1|Feature 2|Feature 3',
         is_featured: false,
         is_deal: false,
         status: 'Active'
@@ -214,8 +222,42 @@ export function Products() {
     ];
 
     const ws = XLSX.utils.json_to_sheet(templateData);
+
+    // Set column widths for readability
+    ws['!cols'] = [
+      { wch: 30 }, { wch: 18 }, { wch: 14 }, { wch: 18 },
+      { wch: 10 }, { wch: 14 }, { wch: 8 }, { wch: 40 },
+      { wch: 50 }, { wch: 40 }, { wch: 12 }, { wch: 10 }, { wch: 10 }
+    ];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Products_Template");
+
+    // Add instructions sheet
+    const instructions = [
+      { Instructions: 'BULK UPLOAD TEMPLATE GUIDE' },
+      { Instructions: '' },
+      { Instructions: 'REQUIRED COLUMNS: name, price, stock, category' },
+      { Instructions: '' },
+      { Instructions: 'COLUMN DETAILS:' },
+      { Instructions: 'name - Product title (required)' },
+      { Instructions: 'brand - Brand name (optional)' },
+      { Instructions: 'sku - Unique SKU code (optional)' },
+      { Instructions: 'category - Must be: Brass Idols, Spiritual Books, Pooja Items, Temple Jewellery, or Homam Samagri' },
+      { Instructions: 'price - Selling price in INR (required, number)' },
+      { Instructions: 'original_price - MRP/Original price in INR (optional, number)' },
+      { Instructions: 'stock - Available quantity (required, number)' },
+      { Instructions: 'description - Full product description (optional)' },
+      { Instructions: 'image - Product image URL (paste a public image URL)' },
+      { Instructions: 'bullet_points - Key features separated by | (pipe). Example: Feature 1|Feature 2|Feature 3' },
+      { Instructions: 'is_featured - true or false (optional, default: false)' },
+      { Instructions: 'is_deal - true or false (optional, default: false)' },
+      { Instructions: 'status - Active, Draft, or Out of Stock (optional, default: Active)' },
+    ];
+    const wsInstructions = XLSX.utils.json_to_sheet(instructions);
+    wsInstructions['!cols'] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+
     XLSX.writeFile(wb, "products_bulk_upload_template.xlsx");
   };
 
@@ -224,37 +266,94 @@ export function Products() {
     if (!file) return;
 
     setBulkUploading(true);
+    setBulkResults(null);
+
+    const VALID_CATEGORIES = ['Brass Idols', 'Spiritual Books', 'Pooja Items', 'Temple Jewellery', 'Homam Samagri'];
+    const errors: string[] = [];
+    let successCount = 0;
+    let failedCount = 0;
+
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(worksheet) as any[];
 
-      const productsToInsert = rows.map(row => ({
-        name: row.name || 'Unnamed Product',
-        brand: row.brand || null,
-        sku: row.sku || null,
-        category: row.category || null,
-        price: Number(row.price) || 0,
-        original_price: row.original_price ? Number(row.original_price) : null,
-        stock: Number(row.stock) || 0,
-        description: row.description || '',
-        image: row.image || null,
-        bullet_points: row.bullet_points ? row.bullet_points.split('|') : [],
-        is_featured: row.is_featured === true || row.is_featured === 'TRUE' || row.is_featured === 'true',
-        is_deal: row.is_deal === true || row.is_deal === 'TRUE' || row.is_deal === 'true',
-        status: row.status || 'Active'
-      }));
+      if (rows.length === 0) {
+        showToast('error', 'Empty File', 'The uploaded file contains no product data.');
+        setBulkUploading(false);
+        return;
+      }
 
-      const { error } = await supabase.from('products').insert(productsToInsert);
-      
-      if (error) throw error;
-      
-      showToast('success', 'Bulk Upload Successful', `${productsToInsert.length} products added.`);
-      fetchProducts();
-    } catch (error) {
+      // Validate and transform each row
+      const validProducts: any[] = [];
+
+      rows.forEach((row, index) => {
+        const rowNum = index + 2; // +2 for header row and 0-index
+        const rowErrors: string[] = [];
+
+        // Required field validation
+        if (!row.name || String(row.name).trim() === '') rowErrors.push('missing name');
+        if (row.price === undefined || row.price === null || row.price === '' || isNaN(Number(row.price))) rowErrors.push('invalid price');
+        if (row.stock === undefined || row.stock === null || row.stock === '' || isNaN(Number(row.stock))) rowErrors.push('invalid stock');
+
+        // Category validation (warning, not blocking)
+        const category = row.category ? String(row.category).trim() : '';
+        if (category && !VALID_CATEGORIES.includes(category)) {
+          rowErrors.push(`unknown category "${category}"`);
+        }
+
+        if (rowErrors.length > 0) {
+          errors.push(`Row ${rowNum} (${row.name || 'unnamed'}): ${rowErrors.join(', ')}`);
+          failedCount++;
+          return;
+        }
+
+        // Transform valid row
+        validProducts.push({
+          name: String(row.name).trim(),
+          brand: row.brand ? String(row.brand).trim() : null,
+          sku: row.sku ? String(row.sku).trim() : null,
+          category: category || null,
+          price: Number(row.price),
+          original_price: row.original_price && !isNaN(Number(row.original_price)) ? Number(row.original_price) : null,
+          stock: Math.max(0, Math.floor(Number(row.stock))),
+          description: row.description ? String(row.description).trim() : '',
+          image: row.image ? String(row.image).trim() : null,
+          bullet_points: row.bullet_points ? String(row.bullet_points).split('|').map((b: string) => b.trim()).filter((b: string) => b) : [],
+          is_featured: row.is_featured === true || String(row.is_featured).toLowerCase() === 'true',
+          is_deal: row.is_deal === true || String(row.is_deal).toLowerCase() === 'true',
+          status: ['Active', 'Draft', 'Out of Stock'].includes(row.status) ? row.status : 'Active'
+        });
+      });
+
+      // Insert in batches of 25 to avoid payload limits
+      const BATCH_SIZE = 25;
+      for (let i = 0; i < validProducts.length; i += BATCH_SIZE) {
+        const batch = validProducts.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from('products').insert(batch);
+
+        if (error) {
+          errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1} failed: ${error.message}`);
+          failedCount += batch.length;
+        } else {
+          successCount += batch.length;
+        }
+      }
+
+      // Show results
+      setBulkResults({ success: successCount, failed: failedCount, errors });
+
+      if (successCount > 0) {
+        showToast('success', 'Bulk Upload Complete', `${successCount} products added successfully.`);
+        fetchProducts();
+      }
+      if (failedCount > 0) {
+        showToast('error', 'Some Rows Failed', `${failedCount} rows had errors. Check the summary.`);
+      }
+    } catch (error: any) {
       console.error("Bulk upload error:", error);
-      showToast('error', 'Bulk Upload Failed', 'Please check your file format and try again.');
+      showToast('error', 'Bulk Upload Failed', error?.message || 'Please check your file format and try again.');
     } finally {
       setBulkUploading(false);
       if (fileInputRef.current) {
@@ -612,7 +711,7 @@ export function Products() {
                 <Trash2 className="w-4 h-4" /> Delete ({selectedProductIds.length})
               </button>
             )}
-            <button onClick={fetchProducts} className="p-2 border border-gray-300 rounded-md text-foreground/70 hover:bg-gray-50" title="Refresh">
+            <button onClick={() => fetchProducts()} className="p-2 border border-gray-300 rounded-md text-foreground/70 hover:bg-gray-50" title="Refresh">
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
@@ -640,9 +739,9 @@ export function Products() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {paginated.length === 0 ? (
+              {products.length === 0 ? (
                 <tr><td colSpan={7} className="px-6 py-8 text-center text-foreground/50">{search || categoryFilter !== 'All' ? 'No products match your filter.' : 'No products found. Add your first product.'}</td></tr>
-              ) : paginated.map((product) => (
+              ) : products.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50/50 group">
                   <td className="px-6 py-4">
                     <input type="checkbox" className="rounded border-gray-300 text-primary focus:ring-primary" checked={selectedProductIds.includes(product.id)} onChange={() => handleSelectOne(product.id)} />
@@ -706,7 +805,7 @@ export function Products() {
 
         {/* Pagination */}
         <div className="p-4 border-t border-gray-200 flex items-center justify-between text-sm text-foreground/70">
-          <div>Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} products</div>
+          <div>Showing {totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, totalCount)} of {totalCount} products</div>
           <div className="flex gap-1">
             <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40">Previous</button>
             {Array.from({ length: totalPages }, (_, i) => i + 1).filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1).map((p, i, arr) => (
@@ -754,6 +853,44 @@ export function Products() {
                   )}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Upload Results Modal */}
+      {bulkResults && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 animate-in fade-in">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-4 mx-auto">
+                <UploadCloud className="w-6 h-6 text-green-600" />
+              </div>
+              <h3 className="text-xl font-bold text-center text-gray-900 mb-2">Bulk Upload Summary</h3>
+              <div className="flex justify-center gap-8 mb-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{bulkResults.success}</div>
+                  <div className="text-xs text-gray-500">Successful</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{bulkResults.failed}</div>
+                  <div className="text-xs text-gray-500">Failed</div>
+                </div>
+              </div>
+              {bulkResults.errors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 max-h-48 overflow-y-auto">
+                  <p className="text-xs font-bold text-red-700 mb-2">Errors:</p>
+                  {bulkResults.errors.map((err, i) => (
+                    <p key={i} className="text-xs text-red-600 mb-1">• {err}</p>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => setBulkResults(null)}
+                className="w-full mt-4 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-600 transition-colors font-medium"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

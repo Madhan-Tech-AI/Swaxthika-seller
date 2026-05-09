@@ -178,10 +178,38 @@ export function Orders() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
-      if (data) setOrders(data);
-    } catch (error) {
-      console.error('Error fetching admin orders:', error);
+      // Try the secure admin RPC function first (bypasses RLS)
+      const { data: rpcData, error: rpcError } = await supabase
+        .rpc('get_all_orders_admin');
+
+      if (!rpcError && rpcData) {
+        console.log('[Admin Orders] RPC success | count:', rpcData.length);
+        // Sort descending by created_at since RPC returns unordered
+        const sorted = [...rpcData].sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setOrders(sorted);
+        return;
+      }
+
+      console.warn('[Admin Orders] RPC failed, falling back to direct query:', rpcError?.message);
+
+      // Fallback: direct table query
+      const { data, error, status } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      console.log('[Admin Orders] Direct query | status:', status, '| count:', data?.length, '| error:', error?.message);
+
+      if (error) {
+        showToast('error', 'Cannot Load Orders', `${error.message}. Check console for details.`);
+        console.error('[Admin Orders] RLS may be blocking access. Run fix_admin_orders_final.sql in Supabase.');
+        return;
+      }
+      setOrders(data || []);
+    } catch (error: any) {
+      console.error('[Admin Orders] Unexpected error:', error);
     } finally {
       setLoading(false);
     }
@@ -238,7 +266,7 @@ export function Orders() {
           <button onClick={fetchOrders} className="p-2 border border-gray-300 rounded-md text-foreground/70 hover:bg-gray-50 transition-colors" title="Refresh">
             <RefreshCw className="w-4 h-4" />
           </button>
-          <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-foreground hover:bg-gray-50 transition-colors">
+          <button onClick={handleExportCSV} className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-foreground hover:bg-gray-50 transition-colors shadow-sm">
             <Download className="w-4 h-4" /> Export CSV
           </button>
         </div>

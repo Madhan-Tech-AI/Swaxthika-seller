@@ -73,7 +73,7 @@ export function Settings() {
                 <label className="block text-sm font-medium text-foreground mb-1">Store Name</label>
                 <input 
                   type="text" 
-                  defaultValue="Sacred Shoppe"
+                  defaultValue="Swaxthika"
                   className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-primary text-sm"
                 />
               </div>
@@ -91,7 +91,7 @@ export function Settings() {
                   <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input 
                     type="email" 
-                    defaultValue="support@sacredshoppe.com"
+                    defaultValue="support@swaxthika.com"
                     className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-primary text-sm"
                   />
                 </div>

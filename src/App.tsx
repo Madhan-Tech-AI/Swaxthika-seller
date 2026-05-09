@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Navigate } from 'react-router-dom';
 import { SellerApplications } from './pages/admin/SellerApplications';
 import { BannersManager } from './pages/admin/BannersManager';
+import { HomeLayoutManager } from './pages/admin/HomeLayoutManager';
 
 import { AdminLayout } from './layouts/AdminLayout';
 import { Dashboard } from './pages/admin/Dashboard';
@@ -29,6 +30,7 @@ function App() {
               <Route path="customers" element={<Customers />} />
               <Route path="carousel" element={<CarouselManager />} />
               <Route path="banners" element={<BannersManager />} />
+              <Route path="layout" element={<HomeLayoutManager />} />
               <Route path="seller-applications" element={<SellerApplications />} />
               <Route path="settings" element={<Settings />} />
             </Route>

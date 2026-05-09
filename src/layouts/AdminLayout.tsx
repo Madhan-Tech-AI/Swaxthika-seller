@@ -1,4 +1,4 @@
-import { LayoutDashboard, ShoppingBag, Users, Package, Settings, LogOut, Search, Bell, Lock, Image, X, Store, FileImage, Sparkles, LogIn, Mail } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, Package, Settings, LogOut, Search, Bell, Lock, Image, X, Store, FileImage, Sparkles, LogIn, Mail, Layout } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
@@ -7,33 +7,165 @@ const ADMIN_SESSION_KEY = 'swaxtika_admin_auth';
 
 export function AdminLayout() {
   const location = useLocation();
-  // Persist auth across reloads using sessionStorage
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  console.log('[AdminLayout] Render called, isCheckingSession:', isCheckingSession);
 
   // Real-time notification state
   const [newOrderCount, setNewOrderCount] = useState(0);
   const [showNotif, setShowNotif] = useState(false);
   const [recentNotifs, setRecentNotifs] = useState<any[]>([]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  // Check for existing Supabase session on mount
+  useEffect(() => {
+    const checkAdmin = async (userId: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('role, is_admin')
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          console.error('[Admin Auth] Error checking profile:', error);
+          return false;
+        }
+        return data?.role === 'admin' || data?.is_admin === true;
+      } catch (err) {
+        return false;
+      }
+    };
+
+    console.log('[Admin Auth] useEffect started');
+
+    // Fallback timeout to prevent infinite loading if getSession hangs
+    const timeoutId = setTimeout(() => {
+      console.warn('[Admin Auth] Session check timed out, forcing load complete');
+      setIsCheckingSession(false);
+    }, 3000);
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      console.log('[Admin Auth] getSession resolved, session:', session ? 'exists' : 'null');
+      try {
+        if (session?.user) {
+          console.log('[Admin Auth] Calling checkAdmin for user', session.user.id);
+          const isAdmin = await checkAdmin(session.user.id);
+          console.log('[Admin Auth] checkAdmin result:', isAdmin);
+          if (isAdmin) {
+            setIsAuthenticated(true);
+          } else {
+            console.log('[Admin Auth] Not admin, signing out');
+            await supabase.auth.signOut().catch(e => console.error(e));
+            setIsAuthenticated(false);
+          }
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        console.error('[Admin Auth] Session check error:', error);
+        setIsAuthenticated(false);
+      } finally {
+        console.log('[Admin Auth] Setting isCheckingSession to false');
+        clearTimeout(timeoutId);
+        setIsCheckingSession(false);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Admin Auth] onAuthStateChange fired! Event:', event, 'Session:', session ? 'exists' : 'null');
+
+      // FIRE AND FORGET - DO NOT AWAIT HERE!
+      // Awaiting here causes a deadlock because supabase.from() calls getSession(),
+      // which waits for the auth state change lock to release.
+      if (session?.user) {
+        checkAdmin(session.user.id).then((isAdmin) => {
+          if (isAdmin) {
+            setIsAuthenticated(true);
+          } else {
+            supabase.auth.signOut().catch(() => { });
+            setIsAuthenticated(false);
+          }
+        }).catch((error) => {
+          console.error('Auth state change checkAdmin error:', error);
+          setIsAuthenticated(false);
+        });
+      } else {
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email === 'Admin@swaxthika.com' && password === 'Admin123') {
-      setIsAuthenticated(true);
-      sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
-      setError('');
-    } else {
-      setError('Invalid email or password');
+    setError('');
+    setLoginLoading(true);
+
+    console.log('[Admin Auth] Starting login process...');
+
+    const loginTimeout = setTimeout(() => {
+      console.warn('[Admin Auth] Login process hung for 10s!');
+      setLoginLoading(false);
+      setError('Login request timed out. Please check your connection.');
+    }, 10000);
+
+    try {
+      console.log('[Admin Auth] Calling signInWithPassword...');
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      console.log('[Admin Auth] signInWithPassword returned. Error:', signInError ? signInError.message : 'None');
+
+      if (signInError) {
+        setError(signInError.message);
+        clearTimeout(loginTimeout);
+        return;
+      }
+
+      if (data.session?.user) {
+        console.log('[Admin Auth] Session exists. Checking profile role...');
+        // Double check admin role before allowing entry
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role, is_admin')
+          .eq('id', data.user.id)
+          .single();
+
+        console.log('[Admin Auth] Profile check returned. Profile:', profile, 'Error:', profileError?.message);
+
+        if (profileError || (!profile?.is_admin && profile?.role !== 'admin')) {
+          console.log('[Admin Auth] Access Denied. Signing out...');
+          await supabase.auth.signOut().catch(() => { });
+          setError('Access Denied. You do not have administrator privileges.');
+          clearTimeout(loginTimeout);
+          return;
+        }
+
+        console.log('[Admin Auth] Setting isAuthenticated to true');
+        setIsAuthenticated(true);
+        console.log('[Admin Auth] Signed in as:', data.user.email, '| UID:', data.user.id);
+      }
+    } catch (err: any) {
+      console.error('[Admin Auth] Login try-catch error:', err);
+      setError(err.message || 'An unexpected error occurred');
+    } finally {
+      console.log('[Admin Auth] Login finally block reached');
+      clearTimeout(loginTimeout);
+      setLoginLoading(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setIsAuthenticated(false);
-    sessionStorage.removeItem(ADMIN_SESSION_KEY);
     setEmail('');
     setPassword('');
   };
@@ -78,16 +210,25 @@ export function AdminLayout() {
     { name: 'Products', path: '/admin/products', icon: Package },
     { name: 'Customers', path: '/admin/customers', icon: Users },
     { name: 'Carousel', path: '/admin/carousel', icon: Image },
-    { name: 'Banners', path: '/admin/banners', icon: FileImage },
+    { name: 'Home Layout', path: '/admin/layout', icon: Layout },
     { name: 'Sellers', path: '/admin/seller-applications', icon: Store },
     { name: 'Settings', path: '/admin/settings', icon: Settings },
   ];
+
+  // Show spinner while checking if user has an existing session
+  if (isCheckingSession) {
+    return (
+      <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center p-6 selection:bg-primary-100 selection:text-primary-900 font-sans">
         <div className="w-full max-w-5xl h-[640px] bg-white rounded-3xl overflow-hidden flex shadow-premium hover:shadow-premium-hover transition-all duration-500 border border-black/5">
-          
+
           {/* Left Visual Column */}
           <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary via-primary/80 to-secondary relative p-12 flex-col justify-between overflow-hidden">
             <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
@@ -115,7 +256,7 @@ export function AdminLayout() {
                 </div>
                 <div>
                   <div className="text-white text-base font-display font-bold leading-none">Swaxtika</div>
-                  <div className="text-white/60 text-xs mt-1">Sacred Ecommerce</div>
+                  <div className="text-white/60 text-xs mt-1">Swaxthika Commerce</div>
                 </div>
               </div>
               <div className="text-white/40 text-xs font-display tracking-widest font-bold">
@@ -184,10 +325,15 @@ export function AdminLayout() {
                 {/* Action Submit */}
                 <button
                   type="submit"
+                  disabled={loginLoading}
                   className="w-full h-12 flex items-center justify-center gap-3 bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary text-white font-bold rounded-xl shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-300 transform active:scale-[0.98] mt-8 select-none disabled:opacity-75"
                 >
-                  <LogIn className="w-5 h-5" />
-                  <span>Access Admin Console</span>
+                  {loginLoading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <LogIn className="w-5 h-5" />
+                  )}
+                  <span>{loginLoading ? 'Signing in...' : 'Access Admin Console'}</span>
                 </button>
               </form>
             </div>
@@ -208,7 +354,7 @@ export function AdminLayout() {
               S
             </div>
             <span className="font-display font-bold tracking-tight text-foreground text-lg">
-              Sacred Admin
+              Swaxthika Admin
             </span>
           </Link>
         </div>
@@ -221,11 +367,10 @@ export function AdminLayout() {
                 <Link
                   key={item.name}
                   to={item.path}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
-                    isActive
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${isActive
                       ? 'bg-primary/10 text-primary'
                       : 'text-foreground/70 hover:bg-gray-100 hover:text-foreground'
-                  }`}
+                    }`}
                 >
                   <item.icon className="w-5 h-5" />
                   {item.name}
@@ -303,12 +448,11 @@ export function AdminLayout() {
                             ₹{order.total_amount} · {new Date(order.created_at).toLocaleDateString('en-IN')}
                           </p>
                         </div>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                          order.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                          order.status === 'Shipped' ? 'bg-purple-100 text-purple-700' :
-                          order.status === 'Processing' ? 'bg-blue-100 text-blue-700' :
-                          'bg-yellow-100 text-yellow-700'
-                        }`}>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${order.status === 'Delivered' ? 'bg-green-100 text-green-700' :
+                            order.status === 'Shipped' ? 'bg-purple-100 text-purple-700' :
+                              order.status === 'Processing' ? 'bg-blue-100 text-blue-700' :
+                                'bg-yellow-100 text-yellow-700'
+                          }`}>
                           {order.status}
                         </span>
                       </Link>

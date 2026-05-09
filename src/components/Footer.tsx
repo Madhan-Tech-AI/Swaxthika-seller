@@ -12,7 +12,7 @@ export function Footer() {
                 S
               </div>
               <span className="font-display font-bold text-2xl tracking-tight text-white">
-                Sacred<span className="text-primary">.</span>
+                Swaxthika<span className="text-primary">.</span>
               </span>
             </Link>
             <p className="text-primary-200 text-sm leading-relaxed mb-6">
@@ -84,7 +84,7 @@ export function Footer() {
         
         <div className="border-t border-primary-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-primary-300 text-sm">
-            &copy; {new Date().getFullYear()} Sacred Shoppe. All rights reserved.
+            &copy; {new Date().getFullYear()} Swaxthika. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <Link to="/privacy" className="text-primary-300 hover:text-white transition-colors text-sm">Privacy Policy</Link>

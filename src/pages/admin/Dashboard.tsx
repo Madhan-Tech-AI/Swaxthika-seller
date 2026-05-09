@@ -12,11 +12,12 @@ export function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [{ count: lowStockCount }, { data: productsData }, { data: ordersData }, { count: customersCount }] = await Promise.all([
+      const [{ count: lowStockCount }, { data: productsData }, { data: ordersData }, { count: customersCount }, { count: totalOrdersCount }] = await Promise.all([
         supabase.from('products').select('*', { count: 'exact', head: true }).lt('stock', 10),
         supabase.from('products').select('*').order('created_at', { ascending: false }).limit(4),
         supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(5),
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('orders').select('*', { count: 'exact', head: true }),
       ]);
 
       const { data: allOrders } = await supabase.from('orders').select('total_amount, status');
@@ -24,7 +25,7 @@ export function Dashboard() {
 
       setStats({
         revenue,
-        orders: ordersData ? ordersData.length : 0,
+        orders: totalOrdersCount || 0,
         customers: customersCount || 0,
         lowStock: lowStockCount || 0,
       });

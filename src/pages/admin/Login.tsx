@@ -67,7 +67,7 @@ export function Login() {
               </div>
               <div>
                 <div className="text-white text-base font-display font-bold leading-none">Swaxtika</div>
-                <div className="text-white/60 text-xs mt-1">Sacred Ecommerce</div>
+                <div className="text-white/60 text-xs mt-1">Swaxthika Commerce</div>
               </div>
             </div>
             <div className="text-white/40 text-xs font-display tracking-widest font-bold">
